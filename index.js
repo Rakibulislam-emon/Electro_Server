@@ -146,7 +146,6 @@ async function run() {
 
                 // Fetch cart items for the logged-in user's email
                 const cartItems = await addToCartCollection.find({ email: userEmail }).toArray();
-                console.log('cartItems:', cartItems)
 
                 // Send the cart items as the response
                 res.json(cartItems);
