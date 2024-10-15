@@ -5,23 +5,26 @@ const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const bcrypt = require('bcrypt'); // For password hashing
 const jwt = require('jsonwebtoken');
-const registration = require('./registration.js')
-const login = require('./login.js')
-
-
+const registration = require('./registration.js');
+const login = require('./login.js');
 
 // Set the port for the server
 const port = process.env.PORT || 8000;
 
 // Middleware
 app.use(express.json());
-app.use(cors());
 
+// Use CORS to allow requests from your frontend domain
+app.use(cors({
+    origin: ['https://electroecommerce.netlify.app', 'http://localhost:5173'],  // Allow requests only from this frontend
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],  // Allowed methods
+    credentials: true  // If you're using cookies or credentials
+}));
 
-// authentication middleware
+// Handle CORS preflight requests
+app.options('*', cors());
 
-
-
+// Authentication middleware
 const authenticateToken = (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1]; // Assuming 'Bearer <token>'
     if (!token) return res.sendStatus(401); // Unauthorized
@@ -33,11 +36,11 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-
 // Basic route to check server status
 app.get('/', (req, res) => {
     res.send('Hello, World!');
 });
+
 
 // MongoDB URI setup
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.zuuvjs1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -66,8 +69,44 @@ async function run() {
         // authentication collection
         const usersCollection = client.db('electroDB').collection('users');
 
-        // * authentication
 
+
+        // * search functionality
+        app.get('/api/search', async (req, res) => {
+            try {
+              const searchTerm = req.query.search?.toLowerCase() || ''; // Case-insensitive search term
+              const category = req.query.category?.toLowerCase() || 'all'; // Case-insensitive category
+          
+              // Fetch all products from the database
+              const allProducts = await allProductsCollection.find().toArray(); // Convert cursor to array
+              console.log('allProducts:', allProducts)
+          
+              // Filter products based on search term and category
+              const filteredProducts = allProducts.filter((product) => {
+                // Check if the product matches the search term (name or description)
+                const matchesSearchTerm =
+                  product.name.toLowerCase().includes(searchTerm) ||
+                  product.description.toLowerCase().includes(searchTerm);
+       
+                // Check if the product matches the category, or if the category is 'all'
+                const matchesCategory = category === 'all' || product.category.toLowerCase() === category;
+          
+                return matchesSearchTerm && matchesCategory;
+              });
+             console.log(filteredProducts, '95');
+              // Send the filtered products as the response
+              res.json(filteredProducts);
+            } catch (error) {
+              console.error('Error fetching products:', error);
+              res.status(500).json({ message: 'Internal Server Error' });
+            }
+          });
+
+
+
+
+
+        // * authentication
         // Use the auth routes for registration
         app.use('/api', (req, res, next) => {
             req.usersCollection = usersCollection; // Attach the usersCollection to the request object
@@ -110,7 +149,7 @@ async function run() {
                 }
                 // If product is not found in any collection
                 return res.status(404).json({ error: 'Product not found' });
-               
+
             } catch (error) {
                 console.error('Error:', error);
                 res.status(500).json({ error: 'Internal server error' });
@@ -121,9 +160,8 @@ async function run() {
         app.post('/api/cart/:id', authenticateToken, async (req, res) => {
             try {
                 const product = req.body; // Product details from request body
-                console.log('product:', product)
                 const totalPrice = product.price * product.quantity; // Calculate total price
-                product.totalPrice = totalPrice;
+                product.totalPrice = (totalPrice);
                 // Post to cart collection
                 const post = await addToCartCollection.insertOne(product);
 
@@ -146,6 +184,7 @@ async function run() {
 
                 // Fetch cart items for the logged-in user's email
                 const cartItems = await addToCartCollection.find({ email: userEmail }).toArray();
+
 
                 // Send the cart items as the response
                 res.json(cartItems);
@@ -448,32 +487,6 @@ async function run() {
 
 
 
-
-
-        // // POST route to insert shuffled data into 'shuffleCollection'
-
-        // app.post('/api/recentlyAdded', async (req, res) => {
-        //     try {
-        //         // Extract the shuffled data from the request body
-        //         const shuffledData = req.body;
-
-        //         // Remove the '_id' field from each object in the array
-        //         const dataWithoutId = shuffledData.map(item => {
-        //             const { _id, ...rest } = item;  // Use destructuring to exclude _id
-        //             return rest;  // Return the object without the _id field
-        //         });
-
-        //         // Insert the modified data into the 'featuredCollection'
-        //         const result = await recentlyAddedCollection.insertMany(dataWithoutId);
-
-        //         // Send a success response back to the client
-        //         res.send('inserted successfully');
-        //         console.log('Data inserted successfully:', result.insertedCount);
-        //     } catch (error) {
-        //         console.error('Error inserting shuffled data:', error);
-        //         res.status(500).send('An error occurred while inserting shuffled data');
-        //     }
-        // });
 
 
         // Ping the database to confirm connection
